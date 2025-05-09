@@ -47,7 +47,7 @@ def comp_neo_diameter(abs_mag: float, albedo: float = 0.15):
 
 
 # Let's convert the absolute magnitude to the corresponding sizes
-neo_diam_array = np.array([round(comp_neo_diameter(k),2) for k in neo_df["AbsMag_"]])
+neo_diam_array = np.array([round(comp_neo_diameter(k), 2) for k in neo_df["AbsMag_"]])
 
 # Print some statistics
 print(f"Known minimum NEO diameter: {np.min(neo_diam_array)} km")
@@ -80,13 +80,13 @@ ax.grid(axis='both', linestyle='dashed', alpha=0.2)
 plt.show()
 
 # Compute a cumulative distribution of the absolute magnitude
-neo_absmag_hist, bins_edge = np.histogram(neo_df["AbsMag_"], \
+neo_absmag_hist, bins_edge = np.histogram(neo_df["AbsMag_"],
                                        bins=np.arange(10.0, 31.0, 1.0))
 cumul_neo_absmag_hist = np.cumsum(neo_absmag_hist)
 # Create a figure and axis
 fig, ax = plt.subplots(figsize=(12, 8))
 # Create a scatter plot of the cumulative distribution.
-ax.scatter(bins_edge[:-1]+1, cumul_neo_absmag_hist, color='tab:orange', alpha=0.7, \
+ax.scatter(bins_edge[:-1]+1, cumul_neo_absmag_hist, color='tab:orange', alpha=0.7,
            marker='o')
 # Set labels for the x and y axes
 ax.set_xlabel('NEO Absolute Magnitude')
