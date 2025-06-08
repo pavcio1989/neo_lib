@@ -145,3 +145,157 @@ plt.savefig(f'./images/07/apparent_magnitudes_histogram.png', dpi=300)
 
 print(f"Number of NEOs Pan-STARRS could observe today: {int(sum(counts[:11]))}")
 print(f"Number of NEOs Pan-STARRS could NOT observe today: {int(sum(counts[11:]))}")
+
+# First a small reminder from session #8: https://www.youtube.com/watch?v=6GnzgzePYLg
+
+# Use a dark background
+plt.style.use('dark_background')
+
+# Set a figure
+plt.figure(figsize=(12, 8))
+
+# Apply the aitoff projection and activate the grid
+plt.subplot(projection="aitoff")
+plt.grid(True)
+
+# Set long. / lat. labels
+plt.xlabel('Long. in deg')
+plt.ylabel('Lat. in deg')
+
+# Replace the standard x ticks (longitude) with the ecliptic coordinates
+plt.xticks(ticks=np.radians([-150, -120, -90, -60, -30, 0,
+                             30, 60, 90, 120, 150]),
+           labels=['150°', '120°', '90°', '60°', '30°', '0°',
+                   '330°', '300°', '270°', '240°', '210°'])
+
+plt.savefig(f'./images/08/ecliptic_coordinates.png', dpi=300)
+
+# For orientation purposes we will plot the Sun and the corresponding opposition in an ecliptic
+# coordinate system
+
+# Compute the vector Earth -> Sun and compute the corresponding long and lat values
+earth2sun_position_vec = -1.0 * sun2earth_position_vec
+_, sun_ecl_long, sun_ecl_lat = spiceypy.recrad(earth2sun_position_vec)
+
+# Convert the values to determine the "Opposition Direction"
+sun_opp_ecl_long = (sun_ecl_long + np.pi) % (2.0 * np.pi)
+sun_opp_ecl_lat = -1.0 * sun_ecl_lat
+
+# We need to transform the longitude values for matplotlib
+sun_ecl_long_4plot = \
+    -1*((sun_ecl_long % np.pi) - np.pi) if sun_ecl_long > np.pi else -1*sun_ecl_long
+sun_opp_ecl_long_4plot = \
+    -1*((sun_opp_ecl_long % np.pi) - np.pi) if sun_opp_ecl_long > np.pi else -1*sun_opp_ecl_long
+
+# Determine today's datetime
+curr_time_utc = datetime.datetime.now().strftime("%Y-%m-%d")
+curr_time_et = spiceypy.utc2et(curr_time_utc)
+
+# Let's print the Sun's coordinates and compare it with values from Stellarium
+print(f"The Sun's Ecliptic Longitude (at: {curr_time_utc}): "
+      f"{round(np.degrees(sun_ecl_long), 2)} deg")
+print(f"The Sun's Ecliptic Latitude (at: {curr_time_utc}): "
+      f"{round(np.degrees(sun_ecl_lat), 2)} deg")
+
+# Now we plot the sky plot with the Sun and the corresponding Opposition direction
+
+# Use a dark background
+plt.style.use('dark_background')
+
+# Set a figure
+plt.figure(figsize=(12, 8))
+
+# Apply the aitoff projection and activate the grid
+plt.subplot(projection="aitoff")
+plt.grid(True)
+
+# Set long. / lat. labels
+plt.xlabel('Long. in deg')
+plt.ylabel('Lat. in deg')
+
+# Replace the standard x ticks (longitude) with the ecliptic coordinates
+plt.xticks(ticks=np.radians([-150, -120, -90, -60, -30, 0,
+                             30, 60, 90, 120, 150]),
+           labels=['150°', '120°', '90°', '60°', '30°', '0°',
+                   '330°', '300°', '270°', '240°', '210°'])
+
+# Add the Sun
+plt.plot(sun_ecl_long_4plot,
+         sun_ecl_lat,
+         color="yellow",
+         marker="o",
+         markersize=15,
+         alpha=0.5)
+
+# Add the Opposition point
+plt.plot(sun_opp_ecl_long_4plot,
+         sun_opp_ecl_lat,
+         color="teal",
+         marker="s",
+         markersize=10,
+         alpha=0.8)
+
+plt.savefig(f'./images/08/ecliptic_coordinates_with_sun.png', dpi=300)
+
+# We compute now the NEO's coordinates in a similar way using the dataframe and the apply function.
+neo_df.loc[:, "earth2neo_position_vec_AU"] = neo_df["neo2earth_position_vec_AU"].apply(lambda x: -1.0 * np.array(x))
+neo_df.loc[:, "earth2neo_recrad"] = neo_df["earth2neo_position_vec_AU"].apply(lambda x: spiceypy.recrad(x))
+neo_df.loc[:, "earth2neo_dist_AU"] = neo_df["earth2neo_recrad"].apply(lambda x: x[0])
+neo_df.loc[:, "earth2neo_eclip_long"] = neo_df["earth2neo_recrad"].apply(lambda x: x[1])
+neo_df.loc[:, "earth2neo_eclip_lat"] = neo_df["earth2neo_recrad"].apply(lambda x: x[2])
+
+# Before we plot the data, we need to convert the longitude data into a
+# matplotlib compatible format. We computed longitude values between 0 and
+# 2*pi (360 degrees). matplotlib expects values between -pi and +pi. Further,
+# sky maps count from 0 degrees longitude to the left. Thus we need also to
+# invert the longitude values
+neo_df.loc[:, "earth2neo_eclip_long_4plot_ecl"] = \
+    neo_df["earth2neo_eclip_long"].apply(lambda x: -1*((x % np.pi) - np.pi) if x > np.pi else -1*x)
+
+# Example from video:
+# neo_sub_df = neo_df.loc[(neo_df["app_mag"] < 24) \
+#                        & (neo_df["AbsMag_"] > 20) \
+#                        & (neo_df["earth2neo_dist_AU"] < 0.25)].copy()
+neo_sub_df = neo_df.loc[(neo_df["app_mag"] > 25)
+                        & (neo_df["AbsMag_"] > 22)
+                        & (neo_df["earth2neo_dist_AU"] < 1)].copy()
+
+# Use a dark background
+plt.style.use('dark_background')
+
+# Set a figure
+plt.figure(figsize=(12, 8))
+
+# Apply the aitoff projection and activate the grid
+plt.subplot(projection="aitoff")
+plt.grid(True)
+
+# Set long. / lat. labels
+plt.xlabel('Long. in deg')
+plt.ylabel('Lat. in deg')
+
+plt.plot(neo_sub_df["earth2neo_eclip_long_4plot_ecl"],
+         neo_sub_df["earth2neo_eclip_lat"],
+         marker='.', linestyle='None', markersize=2, alpha=1, color="lightskyblue")
+
+# Replace the standard x ticks (longitude) with the ecliptic coordinates
+plt.xticks(ticks=np.radians([-150, -120, -90, -60, -30, 0,30, 60, 90, 120, 150]),
+           labels=['150°', '120°', '90°', '60°', '30°', '0°', '330°', '300°', '270°', '240°', '210°'])
+
+# Add the Sun
+plt.plot(sun_ecl_long_4plot,
+         sun_ecl_lat,
+         color="yellow",
+         marker="o",
+         markersize=15,
+         alpha=0.5)
+
+# Add the Opposition point
+plt.plot(sun_opp_ecl_long_4plot,
+         sun_opp_ecl_lat,
+         color="teal",
+         marker="s",
+         markersize=10,
+         alpha=0.8)
+
+plt.savefig(f'./images/08/ecliptic_coordinates_with_sun_and_neos.png', dpi=300)
