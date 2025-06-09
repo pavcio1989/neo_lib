@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import spiceypy
 
+# To enable interactivity, we need ipywidgets
+import ipywidgets
+
 # Append to root directory of this repository
 sys.path.append("../")
 
@@ -299,3 +302,134 @@ plt.plot(sun_opp_ecl_long_4plot,
          alpha=0.8)
 
 plt.savefig(f'./images/08/ecliptic_coordinates_with_sun_and_neos.png', dpi=300)
+
+# Using the SPICE functionvsep, we add a new row: the angular distance between the NEO(s) and the
+# Sun.
+#
+# Background: NEO surveys, or "night time" telescopes (there are Sun-telescopes, so that's why I
+# describe it so strangely), could theoretically operate during dusk and dawn. However, depending
+# on the optics and camera system, even a bright sky could damage the instrument.
+# Since we do not model a horizon, we take an angular distance between NEOs and the Sun as a rough
+# "protection estimate"
+neo_df.loc[:, "ang_dist_neo2sun_deg"] = \
+    neo_df["earth2neo_position_vec_AU"].apply(lambda x:
+                                              np.degrees(spiceypy.vsep(x, earth2sun_position_vec)))
+
+# First we set up some nice interactive widgets
+
+# This cell contains miscellaneous widget elements that are being used in our interactive plotting
+# routine
+
+# A date picker to e.g., compute the positions of the NEOs and the position of the Sun. However,
+# here, it is disabled. Adding this functionality would be a nice "homework" for you!
+date_picker_widget = ipywidgets.DatePicker(
+    description='Date',
+    diabled=True
+)
+
+# We add also a drop-down menu to select the NEO class
+neo_class_widget = ipywidgets.Dropdown(
+    options=['Amor', 'Apollo', 'Aten', 'Atira', 'Other', 'All'],
+    description="NEO Class"
+)
+
+# 2 selection range slider to add filtering options for the apparent and absolute magnitude
+app_mag_widget = ipywidgets.SelectionRangeSlider(
+    options=range(5, 31),
+    index=[0, 10],
+    description='App. Mag'
+)
+
+abs_mag_widget = ipywidgets.SelectionRangeSlider(
+    options=range(9, 35),
+    index=[0, 10],
+    description='Abs. Mag'
+)
+
+# Angular distance between Sun and NEO(s)
+ang_dist_widget = ipywidgets.IntSlider(
+    value=0,
+    min=0,
+    max=60,
+    step=1,
+    description="Sun-Dist",
+)
+
+# Set the dark mode and the font size and style
+plt.style.use('dark_background')
+plt.rc('font', family='serif', size=12)
+
+
+# Set a function for the (interactive) plots
+def plot_sky_map(date, neo_class, app_mag, abs_mag, ang_dist):
+    # Set a figure
+    plt.figure(figsize=(12, 8))
+
+    # Apply the aitoff projection and activate the grid
+    plt.subplot(projection="aitoff")
+    plt.grid(True)
+
+    # Set long. / lat. labels
+    plt.xlabel('Long. in deg')
+    plt.ylabel('Lat. in deg')
+
+    # NEO Class filtering
+    if neo_class == "All":
+        _filtered_neo_df = neo_df.copy()
+    else:
+        _filtered_neo_df = neo_df.loc[neo_df["NEOClass"] == neo_class]
+
+    # App. and Abs. Magnitude filtering
+    _filtered_neo_df = _filtered_neo_df.loc[(_filtered_neo_df["app_mag"] >= app_mag[0])
+                                            & (_filtered_neo_df["app_mag"] <= app_mag[1])]
+
+    _filtered_neo_df = _filtered_neo_df.loc[(_filtered_neo_df["AbsMag_"] >= abs_mag[0])
+                                            & (_filtered_neo_df["AbsMag_"] <= abs_mag[1])]
+
+    # Angular distance filtering
+    _filtered_neo_df = _filtered_neo_df.loc[_filtered_neo_df["ang_dist_neo2sun_deg"] > ang_dist]
+
+    # Plotting the NEOs
+    plt.plot(_filtered_neo_df["earth2neo_eclip_long_4plot_ecl"],
+             _filtered_neo_df["earth2neo_eclip_lat"],
+             marker='.',
+             linestyle='None',
+             markersize=2,
+             alpha=1,
+             color="lightskyblue")
+
+    # Replace the standard x ticks (longitude) with the ecliptic coordinates
+    plt.xticks(ticks=np.radians([-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150]),
+               labels=['150°', '120°', '90°', '60°', '30°', '0°', '330°', '300°', '270°', '240°',
+                       '210°'])
+
+    # Add the Sun
+    plt.plot(sun_ecl_long_4plot,
+             sun_ecl_lat,
+             color="yellow",
+             marker="o",
+             markersize=15,
+             alpha=0.5)
+
+    # Add the Opposition point
+    plt.plot(sun_opp_ecl_long_4plot,
+             sun_opp_ecl_lat,
+             color="teal",
+             marker="s",
+             markersize=10,
+             alpha=0.8)
+
+    # Plot the total number of visible NEOs
+    plt.title(f"#NEOs: {len(_filtered_neo_df)}", fontsize=12)
+
+    plt.show()
+
+
+# Create an interactive session!
+# NOTE: It works only in Jupyter notebook
+ipywidgets.interactive(plot_sky_map,
+                       date=date_picker_widget,
+                       neo_class=neo_class_widget,
+                       app_mag=app_mag_widget,
+                       abs_mag=abs_mag_widget,
+                       ang_dist=ang_dist_widget)
