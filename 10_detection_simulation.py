@@ -4,7 +4,6 @@ import math
 import pathlib
 import sqlite3
 import sys
-import pyarrow
 
 # Installed libraries
 from matplotlib import pyplot as plt
@@ -13,12 +12,8 @@ import pandas as pd
 import spiceypy
 import tqdm
 
-# Append to root directory of this repository
-sys.path.append("./")
-
 # Auxiliary module that contains the apparent magnitude
 from auxiliary import photometry
-
 
 # Accessing the NEO database
 database_dir = pathlib.Path("./databases/neos/")
@@ -57,34 +52,34 @@ neo_df.loc[:, "Epoch_et"] = neo_df["Epoch_JD"].apply(lambda x: spiceypy.utc2et(s
 neo_df = neo_df[neo_df["Perihel_km"] > 0]
 
 # Some simulation parameters (better way: creating a config file for maximum flexibility)
-init_time_utc = "2022-01-01T00:00:00"
+init_time_utc = "2010-01-01T00:00:00"
 init_time_et = spiceypy.utc2et(init_time_utc)
 
 # "Circle" around the opposition that is the detection area (in degrees)
 opp_range = 15.0
 
 # Minimum detection threshold (in magnitude)
-mag_detec = 26.0
+mag_detec = 22.0
 
 # Dataframe that stores the results
 detected_neo_df = pd.DataFrame([])
 
-# Simulation steps in seconds
-time_step_size = 3600.0
+# Simulation steps in hours
+obs_steps = 24.0
 
-# Observation hour range in hours
-obs_range = 8.0
+# Observation range in hours
+obs_range = 2.5 * 365.0 * 24.0
 
 # Simulation loop. For better efficiency this can be done asynchronously
-for time_step_h in tqdm.tqdm(np.arange(0, obs_range, 1)):
+for time_step_h in tqdm.tqdm(np.arange(0, obs_range, 24.0)):
 
     # Computation time
-    init_time_et += time_step_size
-    neo_df.loc[:, "et_of_detection"] = init_time_et
+    _time_et = init_time_et + (time_step_h * 3600.0)
+    neo_df.loc[:, "et_of_detection"] = _time_et
 
     # Position vector of the Earth as seen from the Sun
     sun2earth_position_vec = spiceypy.spkgps(targ=399,
-                                             et=init_time_et,
+                                             et=_time_et,
                                              ref="ECLIPJ2000",
                                              obs=10)[0]
     earth2sun_position_vec = -1.0 * sun2earth_position_vec
@@ -99,7 +94,7 @@ for time_step_h in tqdm.tqdm(np.arange(0, obs_range, 1)):
                                                      x["MeanAnom_rad"],
                                                      x["Epoch_et"],
                                                      gm_sun],
-                                               et=init_time_et)[:3],
+                                               et=_time_et)[:3],
                      axis=1)
 
     # To compute the apparent magnitude we need to re-compute the positional vectors and convert it
@@ -142,8 +137,6 @@ for time_step_h in tqdm.tqdm(np.arange(0, obs_range, 1)):
     if len(neo_df) == 0:
         break
 
-    print(f"Time step: {time_step_h} Number of detected NEOs: {detected_neo_df.shape[0]}")
-
 # Convert the ET detection time to a human-readable format
 detected_neo_df.loc[:, "utc_of_detection"] = \
     detected_neo_df["et_of_detection"].apply(lambda x: spiceypy.et2utc(x, "ISOC", 0))
@@ -162,10 +155,30 @@ detected_neo_df = detected_neo_df[['Name',
                                    'utc_of_detection']].copy()
 
 # Store the results in a parquet file
-pathlib.Path("results/10").mkdir(parents=True, exist_ok=True)
-detected_neo_df.to_parquet(f"results/10/"
+pathlib.Path("results/simulation").mkdir(parents=True, exist_ok=True)
+detected_neo_df.to_parquet(f"results/simulation/"
                            + f"UTC{init_time_utc.split("T")[0]}"
                            + f"_OppDist{opp_range}"
                            + f"_MagDetec{mag_detec}"
-                           + f"_StepSize{time_step_size}"
+                           + f"_StepSize{obs_steps}"
                            + f"_HourObs{obs_range}.parquet")
+
+# We also store the undetected NEOs (for the sake of completion)
+undetected_neo_df = neo_df[['Name',
+                                   'SemMajAxis_AU',
+                                   'Ecc_',
+                                   'Incl_deg',
+                                   'LongAscNode_deg',
+                                   'ArgP_deg',
+                                   'AbsMag_',
+                                   'SlopeParamG_',
+                                   'Aphel_AU',
+                                   'Perihel_AU',
+                                   'NEOClass']].copy()
+
+undetected_neo_df.to_parquet(f"results/simulation/"
+                             + f"UNDETECTED_UTC{init_time_utc.split("T")[0]}"
+                             + f"_OppDist{opp_range}"
+                             + f"_MagDetec{mag_detec}"
+                             + f"_StepSize{obs_steps}"
+                             + f"_HourObs{obs_range}.parquet")
